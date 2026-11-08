@@ -22,7 +22,7 @@ Before step 1, every "Screen Recording *.mov" on the Desktop is moved into this 
 output/<video>/alerts.csv exists is deleted. --keep-videos skips both.
 
 First run on a new Mac (see README.md):
-    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+    bash setup.sh
     .venv/bin/python run_all.py
 Everything runs locally (Apple Vision OCR); no frames leave the machine.
 """
@@ -49,7 +49,7 @@ def check_deps():
             missing.append(mod)
     if missing:
         sys.exit(f"Missing Python packages: {', '.join(missing)}\n"
-                 f"Install with:\n  {sys.executable} -m pip install -r requirements.txt")
+                 "Run the setup first:\n  bash setup.sh")
     for f in ["extract.py", "combine.py", "analyze.py", "report_data.py", "report_html.py", "report_pdf.py"]:
         if not os.path.exists(os.path.join(HERE, f)):
             sys.exit(f"{f} not found next to run_all.py")

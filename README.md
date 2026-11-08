@@ -13,51 +13,36 @@ won't run on Windows or Linux). Apple Silicon (M1–M4) is fastest; Intel Macs w
 
 ```
 run_all.py  extract.py  combine.py  analyze.py  report_data.py  report_html.py  report_pdf.py
-requirements.txt  README.md
+setup.sh  requirements.txt  README.md
 ```
 
 Don't copy `.venv/` (it belongs to the old machine and won't work on a new one).
 `output/` is optional: copy it to keep past results, and those videos won't be reprocessed.
 
-**2. Check Python 3 is installed.** In Terminal:
-
-```bash
-python3 --version
-```
-
-If it prints `Python 3.10` or newer, go to step 3. If not, install it with one of:
-- the macOS installer from https://www.python.org/downloads/, or
-- Homebrew: `brew install python`
-
-(If macOS offers to install "command line developer tools" the first time you type
-`python3`, accept it; that also works.)
-
-**3. Create the virtual environment and install the packages.** From inside the project folder:
+**2. Run the setup script** from inside the project folder:
 
 ```bash
 cd ~/path/to/vid_extract
-python3 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements.txt
+bash setup.sh
 ```
 
-This creates a private `.venv` folder for this project only; nothing is installed system-wide.
-If a pinned version fails to install on a different Python version, install without versions:
-`.venv/bin/pip install opencv-python-headless ocrmac numpy pandas pillow`.
+It:
+1. finds Python 3.14, or installs it with Homebrew (`brew install python@3.14`) if it's
+   missing. Without Homebrew it stops and asks you to install Python 3.14 from
+   https://www.python.org/downloads/macos/, then run `bash setup.sh` again;
+2. creates a private `.venv` folder for this project (nothing is installed system-wide);
+3. installs the latest versions of the packages in `requirements.txt`;
+4. checks everything works: the packages import, Apple's text recognition reads a test
+   ID, and `run_all.py` starts. It also says whether Chrome is there for the PDF.
 
-**4. Check it works:**
+It ends with `Setup done.` when everything is ready. It's safe to run again any time,
+for example to update the packages.
 
-```bash
-.venv/bin/python run_all.py --help
-```
-
-If it prints the usage text, you're set. If it says a package is missing, it prints the install command to run.
-
-**5. For the PDF**, install Google Chrome (or Chromium / Edge / Brave). Without it,
+**3. For the PDF**, install Google Chrome (or Chromium / Edge / Brave). Without it,
 everything else still runs; open `output/report.html` and use File > Print > Save as PDF.
 
 Always run the scripts with `.venv/bin/python` (not plain `python3`), so they use the
-packages from step 3. Alternatively run `source .venv/bin/activate` once per Terminal
+packages from step 2. Alternatively run `source .venv/bin/activate` once per Terminal
 window, then `python run_all.py` works.
 
 ## Adding new recordings
