@@ -1,0 +1,7 @@
+# Versions this project was built and tested with (Python 3.14, macOS, Apple Silicon).
+# ocrmac uses Apple's Vision framework, so this only runs on macOS.
+opencv-python-headless==5.0.0.93
+ocrmac==1.0.1
+numpy==2.5.4
+pandas==3.1.1
+pillow==13.0.0
