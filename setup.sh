@@ -77,4 +77,9 @@ else
   echo "NOTE: no Chrome/Chromium/Edge/Brave in /Applications, so the PDF is skipped (HTML report still made)"
 fi
 
-printf "\nSetup done. To process recordings:\n  .venv/bin/python run_all.py\n"
+# Double-click launcher on the Desktop, pointing at this folder
+LAUNCHER="$HOME/Desktop/Run Alert Report.command"
+sed "s#__PROJECT__#$(pwd)#" "Run Alert Report.command" > "$LAUNCHER" && chmod +x "$LAUNCHER" \
+  && echo "Desktop launcher: $LAUNCHER"
+
+printf "\nSetup done. To process recordings, double-click 'Run Alert Report' on the Desktop, or run:\n  .venv/bin/python run_all.py\n"

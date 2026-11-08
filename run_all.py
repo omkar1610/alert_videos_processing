@@ -7,6 +7,7 @@ Put this file next to extract.py, combine.py, analyze.py, report_data.py and the
     python3 run_all.py                 # process every *.mov in this folder
     python3 run_all.py --force         # redo videos that were already processed
     python3 run_all.py --only "2026-11-07"   # only videos whose name contains this
+    python3 run_all.py --fast          # faster extract (skips OCR while the alert ID is unchanged)
 
 Steps
   1. extract.py     each video -> output/<video>/observations.csv, alerts.csv, time_anchor.txt
@@ -88,6 +89,8 @@ def main():
     ap.add_argument("--only", default=None, help="only videos whose file name contains this text")
     ap.add_argument("--fps", type=float, default=2.0, help="OCR samples per second (transitions are refined to the exact frame)")
     ap.add_argument("--workers", type=int, default=4, help="videos processed in parallel")
+    ap.add_argument("--fast", action="store_true",
+                    help="faster extract: skip OCR while the alert ID line is unchanged (about 4-6x fewer OCR calls)")
     ap.add_argument("--keep-videos", action="store_true",
                     help="don't import from the Desktop and don't delete recordings after processing")
     a = ap.parse_args()
@@ -114,7 +117,8 @@ def main():
 
     if videos:
         step("1/6 Extract alert IDs from video",
-             ["extract.py", *videos, "--fps", str(a.fps), "--workers", str(a.workers), "--out", OUT])
+             ["extract.py", *videos, "--fps", str(a.fps), "--workers", str(a.workers), "--out", OUT,
+              *(["--fast"] if a.fast else [])])
     else:
         print("\n=== 1/6 Extract: no recordings to process, rebuilding the report from past results ===")
     step("2/6 Combine and clean", ["combine.py"])

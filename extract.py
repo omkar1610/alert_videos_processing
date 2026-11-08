@@ -10,6 +10,11 @@ Single pass per video:
   * when the reading changes between two samples, the buffered frames in between are
     binary-searched with OCR to find the exact transition frame
 
+--fast: before each OCR call, the alert ID line (where the ID was last read) is compared
+pixel by pixel with the frame that was last OCR'd. Unchanged pixels = same reading, so
+OCR is skipped; the exact transition frame is found by the same pixel comparison and
+confirmed with one OCR call. Same results, far fewer OCR calls.
+
 Outputs (output/<video stem>/):
   observations.csv  every OCR call (sampled + refinement), raw text kept
   alerts.csv        one row per alert lifecycle: start / end (video ts + wall time)
@@ -64,6 +69,36 @@ def crop(frame):
 
 def read_id(img):
     """Return (alert_id or None, alert_name, confidence, raw_text, n_distinct_ids)."""
+    return read_id_box(img)[:5]
+
+
+# --fast: pixels counted as changed when they differ by more than this (0-255) ...
+PIX_DIFF = 40
+# ... and the ID line counts as changed when more than this many pixels did.
+# Measured: same alert 0 pixels (rarely ~150 for a hover), next alert 930+.
+PIX_CHANGED = 20
+
+
+def id_band(img, box):
+    """Pixel rectangle (y0, y1, x0, x1) around an OCR text box, with a small margin."""
+    H, W = img.shape[:2]
+    x, y, w, h = box
+    y0 = int((1 - y - h) * H - .3 * h * H)
+    y1 = int((1 - y) * H + .3 * h * H)
+    return max(0, y0), min(H, y1), max(0, int(x * W) - 10), min(W, int((x + w) * W) + 10)
+
+
+def band_pixels(img, rect):
+    y0, y1, x0, x1 = rect
+    return cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+
+
+def band_changed(img, anchor):
+    return int((cv2.absdiff(band_pixels(img, anchor["rect"]), anchor["pix"]) > PIX_DIFF).sum()) > PIX_CHANGED
+
+
+def read_id_box(img):
+    """read_id plus the pixel rectangle of the chosen ID line (None when no ID)."""
     im = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     res = ocrmac.OCR(im, recognition_level="accurate", language_preference=["en-US"]).recognize()
     hits = []
@@ -73,12 +108,12 @@ def read_id(img):
         for m in ms:
             # box = (x, y, w, h) normalised, origin bottom-left -> larger y is higher up
             name = re.split(r"\s*[•●·]\s*", text[:m.start()].strip())[0].strip(" •●·")
-            hits.append((box[1] + box[3], m.group(1), name, conf, text))
+            hits.append((box[1] + box[3], m.group(1), name, conf, text, box))
     if not hits:
-        return None, "", 0.0, " | ".join(t for t, _, _ in res)[:300], 0
-    hits.sort(reverse=True)  # topmost line = alert ID line
-    _, aid, name, conf, text = hits[0]
-    return aid, name, float(conf), text, len({h[1] for h in hits})
+        return None, "", 0.0, " | ".join(t for t, _, _ in res)[:300], 0, None
+    hits.sort(key=lambda h: h[:5], reverse=True)  # topmost line = alert ID line (same order as before)
+    _, aid, name, conf, text, box = hits[0]
+    return aid, name, float(conf), text, len({h[1] for h in hits}), id_band(img, box)
 
 
 CLOCK_RE = re.compile(r"(\d{1,2}):(\d{2})")
@@ -150,7 +185,7 @@ def best_name(names):
 
 
 def process(args):
-    path, fps, start_override, outroot = args
+    path, fps, start_override, outroot, fast = args
     stem = os.path.splitext(os.path.basename(path))[0]
     outdir = os.path.join(outroot, stem)
     os.makedirs(outdir, exist_ok=True)
@@ -177,11 +212,25 @@ def process(args):
 
     samples = []   # (frame_idx, ts, alert_id, name, conf)
     cache = {}     # frame_idx -> OCR result (per transition search)
+    anchor = None  # --fast: last OCR'd ID line: dict(rect, pix, res)
+    n_ocr = n_reused = 0
 
     def ocr_at(idx, ts, img, kind):
+        nonlocal anchor, n_ocr, n_reused
         if idx in cache:
             return cache[idx]
-        aid, name, conf, text, nids = read_id(img)
+        if fast and anchor is not None and not band_changed(img, anchor):
+            res = anchor["res"]          # ID line pixels unchanged -> same reading
+            n_reused += 1
+        else:
+            *res, rect = read_id_box(img)
+            n_ocr += 1
+            # Only regular samples set the reference. Frames read during a transition
+            # search can be mid-animation (e.g. a dialog fading in over the panel) and
+            # must not be reused for later frames.
+            if kind == "sample":
+                anchor = dict(rect=rect, pix=band_pixels(img, rect), res=res) if rect else None
+        aid, name, conf, text, nids = res
         ow.writerow([idx, f"{ts:.3f}", wall(ts), kind, aid or "", name, f"{conf:.2f}", nids, text])
         cache[idx] = (aid, name, conf)
         return cache[idx]
@@ -209,10 +258,28 @@ def process(args):
             continue
         next_t = ts + 1.0 / fps
         cache.clear()
+        prev_anchor = anchor
         aid, name, conf = ocr_at(idx, ts, img, "sample")
         if prev is not None and aid != prev[3]:
             # binary search in buf for first frame whose reading != prev reading
             lo_i, hi_i = -1, len(buf)  # buf[-1]=prev, buf[len]=current
+            if fast and prev_anchor is not None and prev_anchor["res"][0] == prev[3]:
+                # pixels can only change at or before the reading changes: find the first
+                # frame whose ID line differs (no OCR), then confirm it with one OCR call
+                p_lo, p_hi = -1, len(buf)
+                while p_hi - p_lo > 1:
+                    mid = (p_lo + p_hi) // 2
+                    if band_changed(buf[mid][2], prev_anchor):
+                        p_hi = mid
+                    else:
+                        p_lo = mid
+                lo_i = p_lo          # frames up to here look identical -> old reading
+                if p_hi < len(buf):
+                    fi, fts, fim = buf[p_hi]
+                    if ocr_at(fi, fts, fim, "refine")[0] != prev[3]:
+                        hi_i = p_hi  # first changed frame already reads differently
+                    else:
+                        lo_i = p_hi  # changed pixels, same ID: keep searching with OCR
             while hi_i - lo_i > 1:
                 mid = (lo_i + hi_i) // 2
                 fi, fts, fim = buf[mid]
@@ -326,8 +393,9 @@ def process(args):
         w.writeheader()
         w.writerows(rows)
     os.replace(tmp, os.path.join(outdir, "alerts.csv"))
+    extra = f"  ocr_calls={n_ocr} skipped={n_reused}" if fast else f"  ocr_calls={n_ocr}"
     return (f"done: {stem}  start={start}  video={end_ts:.0f}s  alerts={len(rows)}  "
-            f"elapsed={time.time()-t_start:.0f}s")
+            f"elapsed={time.time()-t_start:.0f}s" + extra)
 
 
 def main():
@@ -337,8 +405,10 @@ def main():
     ap.add_argument("--start", default=None, help="override recording start 'YYYY-MM-DD HH:MM:SS'")
     ap.add_argument("--out", default="output")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--fast", action="store_true",
+                    help="skip OCR when the alert ID line's pixels haven't changed (same results, much faster)")
     a = ap.parse_args()
-    jobs = [(v, a.fps, a.start, a.out) for v in a.videos]
+    jobs = [(v, a.fps, a.start, a.out, a.fast) for v in a.videos]
     if len(jobs) == 1:
         print(process(jobs[0]))
     else:

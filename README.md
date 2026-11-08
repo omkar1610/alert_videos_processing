@@ -13,7 +13,7 @@ won't run on Windows or Linux). Apple Silicon (M1–M4) is fastest; Intel Macs w
 
 ```
 run_all.py  extract.py  combine.py  analyze.py  report_data.py  report_html.py  report_pdf.py
-setup.sh  requirements.txt  README.md
+setup.sh  "Run Alert Report.command"  requirements.txt  README.md
 ```
 
 Don't copy `.venv/` (it belongs to the old machine and won't work on a new one).
@@ -33,7 +33,8 @@ It:
 2. creates a private `.venv` folder for this project (nothing is installed system-wide);
 3. installs the latest versions of the packages in `requirements.txt`;
 4. checks everything works: the packages import, Apple's text recognition reads a test
-   ID, and `run_all.py` starts. It also says whether Chrome is there for the PDF.
+   ID, and `run_all.py` starts. It also says whether Chrome is there for the PDF;
+5. puts the `Run Alert Report` double-click launcher on the Desktop.
 
 It ends with `Setup done.` when everything is ready. It's safe to run again any time,
 for example to update the packages.
@@ -52,13 +53,20 @@ window, then `python run_all.py` works.
    name: the date and time in the name are how a recording is placed on the clock.
    (You can also drop a `.mov` into this folder yourself; that works too.)
 
-2. **Run:**
+2. **Double-click `Run Alert Report` on the Desktop.** A Terminal window opens, shows
+   progress, and opens the report when it's done. Press Enter to close the window.
+
+   `setup.sh` puts this launcher on the Desktop. You can move it anywhere (Dock, another
+   folder). It runs `run_all.py --fast`; on a Mac without the setup done, it runs
+   `setup.sh` first.
+
+   From Terminal instead:
 
    ```bash
-   .venv/bin/python run_all.py
+   .venv/bin/python run_all.py --fast
    ```
 
-3. **Open** `output/report.pdf` (or `output/report.html`).
+3. **The report** is `output/report.pdf` (or `output/report.html`).
 
 ### Recordings are moved in, then deleted
 
@@ -90,8 +98,10 @@ The report always covers every recording processed so far. A new recording gets 
 row in "By session" and its own per-minute chart, and the totals and summary text
 update automatically.
 
-**Time:** about half the video's length per video, up to 4 videos in parallel (a
-25-minute recording takes about 11 minutes). Steps 2–6 take seconds. An interrupted run
+**Time:** with `--fast`, about 1/7 of the video's length when one video runs alone (a
+25-minute recording about 4 minutes); without it about 1/3. Up to 4 videos run in
+parallel (`--workers`), each somewhat slower than alone; with more, the next starts
+when one finishes. Steps 2–6 take seconds. An interrupted run
 resumes: finished videos are kept and skipped next time, and no video is deleted unless
 the whole run finished.
 
@@ -102,7 +112,26 @@ the whole run finished.
 .venv/bin/python run_all.py --force --only "2026-11-08"   # redo only videos whose name contains this
 .venv/bin/python run_all.py --workers 2                   # fewer videos in parallel
 .venv/bin/python run_all.py --keep-videos                 # don't move from Desktop, don't delete videos
+.venv/bin/python run_all.py --fast                        # much faster extract step (see below)
 ```
+
+### `--fast`
+
+Most of the extract time is text recognition (about 0.1 s per call), and most calls
+re-read an alert ID that hasn't changed. With `--fast`, before each call the ID line
+(where the ID was last read) is compared pixel by pixel with the last frame that was
+read. If nothing changed, the previous reading is reused. When it changes, the exact
+frame is found by the same pixel comparison and confirmed with one recognition call.
+
+Checked against the normal mode on two recordings:
+
+| Recording | Normal | `--fast` | Alerts identical |
+|---|---|---|---|
+| 13 min (8:44 AM) | 251 s, 2,164 recognition calls | 111 s, 481 calls | 90 of 91 (other starts 0.07 s apart) |
+| 19 min (1:15 PM, many dialogs) | n/a | 149 s, 825 calls | 88 of 89 (other starts 0.22 s apart) |
+
+The few differences are on frames mid-transition, where both modes read a half-faded ID.
+The double-click launcher uses `--fast`.
 
 ## Things to know
 
