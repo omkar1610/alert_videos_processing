@@ -173,6 +173,9 @@ The double-click launcher uses `--fast`.
 - **Waiting:** time the portal showed "Waiting for alerts to arrive". Gaps between
   recordings are not counted.
 - **Cleared per minute:** alerts whose removal fell inside that clock minute.
+- **Per busy minute:** alerts cleared ÷ minutes not spent waiting for alerts. "Per minute"
+  drops whenever the queue is empty; "per busy minute" shows handling speed regardless
+  of how many alerts arrived.
 - **Left out:** alerts already on screen when a recording started (unknown start) are left
   out of time-per-alert figures; alerts still on screen when a recording ended are not
   counted as cleared.

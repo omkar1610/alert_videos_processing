@@ -62,14 +62,14 @@ for _, ses in per.iterrows():
     parts.append(f'<line class="ref" x1="{ml}" x2="{W - mr}" y1="{y(avg):.1f}" y2="{y(avg):.1f}"/></svg>')
     charts.append(
         f'<div class="row"><div class="rl">{e(ses["session"])}<span>{fi(ses["alerts_cleared"])} cleared · '
-        f'{f1(ses["clears_per_min"])} per min · median {f1(ses["median_handle_s"])} s</span></div>{"".join(parts)}</div>')
+        f'{f1(ses["clears_per_min"])} per min · {f1(ses["clears_per_busy_min"])} per busy min · median {f1(ses["median_handle_s"])} s</span></div>{"".join(parts)}</div>')
 
 # ---------- tables ----------
 srows = "".join(
     f'<tr{" class=total" if r["session"] == "All sessions" else ""}><td>{e(r["session"])}</td>'
     f'<td>{e(str(r["start_time"]) if pd.notna(r["start_time"]) else "")}</td><td>{e(str(r["end_time"]) if pd.notna(r["end_time"]) else "")}</td>'
     f'<td>{f1(r["recorded_min"])}</td><td>{fi(r["alerts_cleared"])}</td><td>{f1(r["clears_per_min"])}</td>'
-    f'<td>{f1(r["median_handle_s"])}</td><td>{f1(r["p90_handle_s"])}</td><td>{f1(r["idle_pct"])}</td></tr>'
+    f'<td><b>{f1(r["clears_per_busy_min"])}</b></td><td>{f1(r["median_handle_s"])}</td><td>{f1(r["p90_handle_s"])}</td><td>{f1(r["idle_pct"])}</td></tr>'
     for _, r in s.iterrows())
 tmax = t["median_s"].max()
 trows = "".join(
@@ -78,8 +78,8 @@ trows = "".join(
     f'<td>{f1(r["p90_s"])}</td></tr>'
     for _, r in t.iterrows())
 
-slow = per.sort_values("clears_per_min").iloc[0]
-fast = per.sort_values("clears_per_min").iloc[-1]
+slow = per.sort_values("clears_per_busy_min").iloc[0]
+fast = per.sort_values("clears_per_busy_min").iloc[-1]
 days = list(dict.fromkeys(x.split(",")[0] for x in per["session"]))
 dates = days[0] if len(days) == 1 else ", ".join(days[:-1]) + " and " + days[-1]
 
@@ -154,7 +154,12 @@ page = f"""<!doctype html>
     .card, .kpi {{ break-inside: avoid; }}
     .card {{ padding: 12px 14px; }}
     .kpi {{ padding: 8px 12px; }} .kpi .v {{ font-size: 1.45rem; }}
-    .kpis {{ grid-template-columns: repeat(5, 1fr); }}
+    .kpis {{ grid-template-columns: repeat(6, 1fr); }}
+    .tbl {{ overflow: visible; }}
+    table {{ font-size: 0.8rem; }}
+    th {{ white-space: normal; vertical-align: bottom; padding: 5px 6px; }}
+    td {{ padding: 5px 6px; }}
+    td:first-child {{ min-width: 8.5rem; }}
     .row {{ break-inside: avoid; margin-bottom: 6px; }}
     .hover-hint {{ display: none; }}
   }}
@@ -167,14 +172,15 @@ page = f"""<!doctype html>
     <h1>Alert handling pace</h1>
     <p class="lede">Across {len(per)} screen recordings from {dates}, I cleared <b>{fi(tot["alerts_cleared"])}</b> alerts in
     <b>{f1(tot["recorded_min"])}</b> recorded minutes, a median of <b>{f1(tot["median_handle_s"])}</b> seconds per alert.
-    The queue was empty for only <b>{f1(tot["idle_pct"])}%</b> of that time, so the per-minute counts show handling speed
-    rather than how many alerts arrived. The fastest session was {e(fast["session"])} at <b>{f1(fast["clears_per_min"])}</b> per minute;
-    the slowest was {e(slow["session"])} at <b>{f1(slow["clears_per_min"])}</b>.</p>
+    The queue was empty (waiting for alerts) <b>{f1(tot["idle_pct"])}%</b> of the time. Counting only the time there was work on
+    screen, I cleared <b>{f1(tot["clears_per_busy_min"])}</b> per minute. By that measure the fastest session was {e(fast["session"])}
+    at <b>{f1(fast["clears_per_busy_min"])}</b> per busy minute; the slowest was {e(slow["session"])} at <b>{f1(slow["clears_per_busy_min"])}</b>.</p>
   </header>
 
   <section class="kpis" aria-label="Headline figures">
     <div class="kpi"><span class="k">Alerts cleared</span><span class="v">{fi(tot["alerts_cleared"])}</span></div>
     <div class="kpi"><span class="k">Cleared per minute</span><span class="v">{f1(tot["clears_per_min"])}</span></div>
+    <div class="kpi"><span class="k">Per busy minute (excl. waiting)</span><span class="v">{f1(tot["clears_per_busy_min"])}</span></div>
     <div class="kpi"><span class="k">Median time per alert</span><span class="v">{f1(tot["median_handle_s"])}<span class="u">s</span></span></div>
     <div class="kpi"><span class="k">9 in 10 alerts done within</span><span class="v">{f1(tot["p90_handle_s"])}<span class="u">s</span></span></div>
     <div class="kpi"><span class="k">Queue empty (waiting)</span><span class="v">{f1(tot["idle_pct"])}<span class="u">%</span></span></div>
@@ -182,9 +188,10 @@ page = f"""<!doctype html>
 
   <section class="card">
     <h2>By session</h2>
-    <p class="note">Start and end are the first and last recorded second, in Mac local time (24-hour), for matching against Grafana. Time per alert runs from when it appeared to when it was cleared.</p>
+    <p class="note">Start and end are the first and last recorded second, in Mac local time (24-hour), for matching against Grafana. Time per alert runs from when it appeared to when it was cleared.
+    <b>Per min</b> counts every recorded minute, so it drops when the queue is empty; <b>Per busy min</b> leaves out time spent waiting for alerts, so it shows handling speed.</p>
     <div class="tbl"><table>
-      <thead><tr><th>Session</th><th>Start</th><th>End</th><th>Minutes</th><th>Cleared</th><th>Per min</th><th>Median s</th><th>90th pct s</th><th>Waiting %</th></tr></thead>
+      <thead><tr><th>Session</th><th>Start</th><th>End</th><th>Minutes</th><th>Cleared</th><th>Per min</th><th>Per busy min</th><th>Median s</th><th>90th pct s</th><th>Waiting %</th></tr></thead>
       <tbody>{srows}</tbody></table></div>
   </section>
 
@@ -215,7 +222,8 @@ page = f"""<!doctype html>
       <dt>Clock time</dt><dd>Each recording's start was pinned to the exact frame where the menu-bar clock changed minute, then carried forward with the video's own timestamps. Accurate to about a frame (1/60 s).</dd>
       <dt>Time per alert</dt><dd>From the first frame an alert ID appeared to the first frame it was gone. Time in the live camera view or the verify dialog for the same alert counts toward that alert.</dd>
       <dt>Waiting</dt><dd>Time the portal showed "Waiting for alerts to arrive". Gaps between recordings are not counted.</dd>
-      <dt>Cleared per minute</dt><dd>Alerts whose removal fell inside that clock minute, regardless of when they appeared.</dd>
+      <dt>Cleared per minute</dt><dd>Alerts whose removal fell inside that clock minute, regardless of when they appeared. Per session: alerts cleared ÷ recorded minutes.</dd>
+      <dt>Per busy minute</dt><dd>Alerts cleared ÷ minutes with work on screen (recorded minutes minus waiting). It shows handling speed regardless of how many alerts arrived: a session with an empty queue half the time has a low "per minute" but can still have a normal "per busy minute".</dd>
       <dt>Left out</dt><dd>Alerts already on screen when a recording started are left out of time-per-alert figures, since their real start is unknown. Alerts still on screen when a recording ended are not counted as cleared.</dd>
     </dl>
   </section>

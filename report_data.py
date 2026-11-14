@@ -36,7 +36,8 @@ s["start_time"] = s["start"].dt.strftime("%H:%M:%S")
 s["end_time"] = s["end"].dt.strftime("%H:%M:%S")
 s.loc[s["session"] == "ALL", ["start_time", "end_time"]] = ""
 s["clears_per_min"] = (s["alerts_cleared"] / s["recorded_min"]).round(2)
-s = s.sort_values("order")[["label", "order", "start_time", "end_time", "recorded_min", "alerts_cleared", "clears_per_min", "clears_per_hour",
+s["clears_per_busy_min"] = (s["clears_per_busy_hour"] / 60).round(2)  # minutes not spent waiting
+s = s.sort_values("order")[["label", "order", "start_time", "end_time", "recorded_min", "alerts_cleared", "clears_per_min", "clears_per_busy_min", "clears_per_hour",
                             "median_handle_s", "avg_handle_s", "p90_handle_s", "idle_pct", "alerts_investigated"]]
 s = s.rename(columns={"label": "session"})
 s.to_csv(os.path.join(R, "sessions.csv"), index=False)
