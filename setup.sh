@@ -79,7 +79,8 @@ fi
 
 # Double-click launcher on the Desktop, pointing at this folder
 LAUNCHER="$HOME/Desktop/Run Alert Report.command"
-sed "s#__PROJECT__#$(pwd)#" "Run Alert Report.command" > "$LAUNCHER" && chmod +x "$LAUNCHER" \
-  && echo "Desktop launcher: $LAUNCHER"
+# write a new file and swap it in (never edit the launcher in place: it may be running)
+sed "s#__PROJECT__#$(pwd)#" "Run Alert Report.command" > "$LAUNCHER.tmp" && chmod +x "$LAUNCHER.tmp" \
+  && mv -f "$LAUNCHER.tmp" "$LAUNCHER" && echo "Desktop launcher: $LAUNCHER"
 
 printf "\nSetup done. To process recordings, double-click 'Run Alert Report' on the Desktop, or run:\n  .venv/bin/python run_all.py\n"

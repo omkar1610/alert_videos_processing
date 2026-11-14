@@ -78,8 +78,9 @@ trows = "".join(
     f'<td>{f1(r["p90_s"])}</td></tr>'
     for _, r in t.iterrows())
 
-slow = per.sort_values("clears_per_busy_min").iloc[0]
-fast = per.sort_values("clears_per_busy_min").iloc[-1]
+ranked = per.dropna(subset=["clears_per_busy_min"]).sort_values("clears_per_busy_min")
+ranked = ranked if len(ranked) else per
+slow, fast = ranked.iloc[0], ranked.iloc[-1]
 days = list(dict.fromkeys(x.split(",")[0] for x in per["session"]))
 dates = days[0] if len(days) == 1 else ", ".join(days[:-1]) + " and " + days[-1]
 

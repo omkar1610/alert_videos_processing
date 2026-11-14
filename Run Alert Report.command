@@ -1,6 +1,9 @@
 #!/bin/bash
 # Double-click to process new recordings and open the report.
 # Works next to run_all.py, or anywhere (e.g. the Desktop) once setup.sh has filled in PROJECT.
+# Everything is inside main(), which bash reads in full before running it, so the
+# script keeps working even if this file is replaced while it runs (setup.sh does that).
+main() {
 PROJECT="__PROJECT__"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$HERE/run_all.py" ] && PROJECT="$HERE"
@@ -24,3 +27,5 @@ else
   echo; echo "Something failed (see the messages above)."
 fi
 read -r -p "Press Enter to close this window." _
+}
+main "$@"; exit  # keep on one line: nothing after this is read

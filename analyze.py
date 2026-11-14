@@ -38,7 +38,7 @@ al["handle_valid"] = al["removed"] & ~al["truncated_start"]
 
 # recording coverage per video
 cov = obs.groupby("video")["wall_time"].agg(["min", "max"]).reset_index()
-cov = cov[cov["video"].isin(al["video"].unique())]  # only fully processed videos
+# (all_observations.csv only holds fully processed videos; ones with no alerts are kept)
 
 # gap to next alert (same video only)
 al = al.sort_values(["video", "start_wall"]).reset_index(drop=True)
@@ -106,14 +106,16 @@ def summarize(a, c, label):
     covered = (c["max"] - c["min"]).dt.total_seconds().sum()
     idle = wt[wt["video"].isin(c["video"])]["duration_s"].sum()
     busy = covered - idle
+    per_h = lambda n, s: round(n / (s / 3600), 1) if s > 0 else np.nan  # noqa: E731
     h = a[a["handle_valid"]]["duration_s"]
     return dict(session=label, start=c["min"].min(), end=c["max"].max(),
                 recorded_min=round(covered / 60, 1), alerts_seen=len(a), alerts_cleared=int(a["removed"].sum()),
-                busy_pct=round(100 * busy / covered, 1), idle_pct=round(100 - 100 * busy / covered, 1),
+                busy_pct=round(100 * busy / covered, 1) if covered else np.nan,
+                idle_pct=round(100 - 100 * busy / covered, 1) if covered else np.nan,
                 avg_handle_s=round(h.mean(), 1), median_handle_s=round(h.median(), 1),
                 p90_handle_s=round(h.quantile(.9), 1),
-                clears_per_recorded_hour=round(a["removed"].sum() / (covered / 3600), 1),
-                clears_per_busy_hour=round(a["removed"].sum() / (busy / 3600), 1),
+                clears_per_recorded_hour=per_h(a["removed"].sum(), covered),
+                clears_per_busy_hour=per_h(a["removed"].sum(), busy),
                 alerts_investigated=int(a["investigated"].sum()),
                 median_next_alert_gap_s=round(a["next_alert_gap_s"].median(), 1),
                 pct_back_to_back=round(100 * (a["next_alert_gap_s"] < 1).mean(), 1),

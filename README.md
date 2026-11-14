@@ -139,6 +139,11 @@ The double-click launcher uses `--fast`.
   (e.g. `output/Screen Recording 2026-11-06 at 8.44.08 AM/`) and run again. Deleting only
   the `.mov` keeps it in the report (that's what the automatic clean-up relies on).
 - **`sample_video.mov` is always ignored**, since it has no time in its name.
+- **A recording with no alerts** (queue empty the whole time, or the portal not on screen)
+  still appears in the report as its own session with 0 cleared; its waiting time counts.
+  If it was recorded by mistake, delete its folder in `output/` and run again.
+- **If the Desktop launcher misbehaves after an update**, run `bash setup.sh` once in
+  the project folder; it puts a fresh copy on the Desktop.
 - **Times** are Mac local time. Session start and end in the report are the first and
   last recorded second (24-hour), for matching against Grafana. Shift them if Grafana is
   set to another timezone.

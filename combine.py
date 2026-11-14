@@ -26,6 +26,11 @@ import pandas as pd
 OUT = os.environ.get("OUT", "output")
 
 
+# Columns of each output/<video>/alerts.csv (same as ALERT_COLS in extract.py)
+ALERT_COLS = ["alert_id", "alert_name", "start_video_ts", "end_video_ts", "start_wall", "end_wall",
+              "duration_s", "start_uncertainty_s", "end_uncertainty_s", "status", "n_samples",
+              "min_conf", "flags"]
+
 def hamming(a, b):
     if not isinstance(a, str) or not isinstance(b, str) or len(a) != len(b):
         return 99
@@ -81,6 +86,11 @@ for vdir in sorted(glob.glob(os.path.join(OUT, "*", ""))):
             i += 1
 
     a = pd.read_csv(os.path.join(vdir, "alerts.csv"), dtype={"alert_id": str})
+    # Older runs wrote only an "alert_id" header when a recording had no alerts.
+    a = a.reindex(columns=ALERT_COLS)
+    if a.empty:
+        print(f"note: no alerts found in {video} (its recorded and waiting time still count)")
+        continue
     a["flags"] = a["flags"].fillna("")
     a.insert(0, "video", video)
     all_raw.append(a.copy())
@@ -143,12 +153,12 @@ for vdir in sorted(glob.glob(os.path.join(OUT, "*", ""))):
 
 obs = pd.concat(all_obs, ignore_index=True).sort_values(["wall_time", "video", "video_ts"], kind="stable")
 obs.to_csv(os.path.join(OUT, "all_observations.csv"), index=False)
-pd.concat(all_raw, ignore_index=True).sort_values(["start_wall"]).to_csv(
+(pd.concat(all_raw, ignore_index=True) if all_raw else pd.DataFrame(columns=["video"] + ALERT_COLS)).sort_values(["start_wall"]).to_csv(
     os.path.join(OUT, "all_alerts_raw.csv"), index=False)
 cols = ["video", "alert_id", "alert_name", "start_wall", "end_wall", "duration_s", "start_video_ts",
         "end_video_ts", "start_uncertainty_s", "end_uncertainty_s", "status", "away_s", "investigated",
         "merged_parts", "n_samples", "min_conf", "flags"]
-clean = pd.concat(all_clean, ignore_index=True).sort_values(["start_wall"])[cols]
+clean = (pd.concat(all_clean, ignore_index=True) if all_clean else pd.DataFrame(columns=cols)).sort_values(["start_wall"])[cols]
 clean.to_csv(os.path.join(OUT, "all_alerts.csv"), index=False)
 wait = pd.DataFrame(all_wait)
 wait.to_csv(os.path.join(OUT, "all_waiting.csv"), index=False)

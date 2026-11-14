@@ -49,6 +49,11 @@ ID_ONLY_RE = re.compile(r"^\s*[•●·]?\s*(\d{9})\d?\s*$")  # box containing j
 # OCR dropout / overlay, not a removal.
 GAP_MERGE_S = 2.0
 
+# Columns of alerts.csv (written even when a recording has no alerts).
+ALERT_COLS = ["alert_id", "alert_name", "start_video_ts", "end_video_ts", "start_wall", "end_wall",
+              "duration_s", "start_uncertainty_s", "end_uncertainty_s", "status", "n_samples",
+              "min_conf", "flags"]
+
 FNAME_RE = re.compile(r"(\d{4}-\d{2}-\d{2}) at (\d{1,2})\.(\d{2})\.(\d{2})\s*([AP]M)", re.I)
 
 
@@ -389,7 +394,7 @@ def process(args):
     # (run_all.py relies on that to skip it and to delete the recording).
     tmp = os.path.join(outdir, "alerts.csv.tmp")
     with open(tmp, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else ["alert_id"])
+        w = csv.DictWriter(fh, fieldnames=ALERT_COLS)
         w.writeheader()
         w.writerows(rows)
     os.replace(tmp, os.path.join(outdir, "alerts.csv"))
